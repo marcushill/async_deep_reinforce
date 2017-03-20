@@ -111,6 +111,7 @@ class A3CTrainingThread(object):
 
         # t_max times loop
         # for i in range(LOCAL_T_MAX):
+        episode_step_count = 1
         while not self.game.terminal:
             pi_, value_ = self.local_network.run_policy_and_value(sess, self.game.s_t)
             action = self.choose_action(pi_)
@@ -137,8 +138,17 @@ class A3CTrainingThread(object):
 
             self.local_t += 1
 
+            if len(actions) == 30 and not self.game.terminal and episode_step_count < self.game.max_episode_length -1 :
+                value = self.local_network.run_value(sess, self.game.s_t)
+                self.train(sess, global_t, actions, states, rewards, values, value)
+                states = []
+                actions = []
+                rewards = []
+                values = []
+
             # s_t1 -> s_t
             self.game.update()
+            episode_step_count += 1
 
             if terminal:
                 terminal_end = True
@@ -187,29 +197,6 @@ class A3CTrainingThread(object):
 
         cur_learning_rate = self._anneal_learning_rate(global_t)
 
-        # if USE_LSTM:
-        #     batch_si.reverse()
-        #     batch_a.reverse()
-        #     batch_td.reverse()
-        #     batch_R.reverse()
-        #
-        #     sess.run(self.apply_gradients,
-        #              feed_dict={
-        #                  self.local_network.s: batch_si,
-        #                  self.local_network.a: batch_a,
-        #                  self.local_network.td: batch_td,
-        #                  self.local_network.r: batch_R,
-        #                  self.local_network.initial_lstm_state: start_lstm_state,
-        #                  self.local_network.step_size: [len(batch_a)],
-        #                  self.learning_rate_input: cur_learning_rate})
-        # else:
-        #     sess.run(self.apply_gradients,
-        #              feed_dict={
-        #                  self.local_network.s: batch_si,
-        #                  self.local_network.a: batch_a,
-        #                  self.local_network.td: batch_td,
-        #                  self.local_network.r: batch_R,
-        #                  self.learning_rate_input: cur_learning_rate})
         self.local_network.apply_gradients(sess, self.apply_gradients, batch_si, batch_a, batch_td, batch_R, cur_learning_rate)
 
         if (self.thread_index == 0) and (self.local_t - self.prev_local_t >= PERFORMANCE_LOG_INTERVAL):
@@ -222,3 +209,36 @@ class A3CTrainingThread(object):
         # return advanced local step size
         diff_local_t = self.local_t - start_local_t
         return diff_local_t
+
+    def train(self, sess, global_t, actions, states, rewards, values, R=0.0):
+        # The other code does the below every 30 frames
+        actions.reverse()
+        states.reverse()
+        rewards.reverse()
+        values.reverse()
+
+        batch_si = []
+        batch_a = []
+        batch_td = []
+        batch_R = []
+
+        # compute and accmulate gradients
+        for (ai, ri, si, Vi) in zip(actions, rewards, states, values):
+            R = ri + GAMMA * R
+            td = R - Vi
+            a = np.zeros([self.game.get_action_size()])
+            a[ai] = 1
+
+            batch_si.append(si)
+            batch_a.append(a)
+            batch_td.append(td)
+            batch_R.append(R)
+
+        cur_learning_rate = self._anneal_learning_rate(global_t)
+
+        self.local_network.apply_gradients(sess, self.apply_gradients,
+                                           batch_si,
+                                           batch_a,
+                                           batch_td,
+                                           batch_R,
+                                           cur_learning_rate)
