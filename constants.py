@@ -3,12 +3,12 @@
 LOCAL_T_MAX = 20  # repeat step size
 RMSP_ALPHA = 0.99  # decay parameter for RMSProp
 RMSP_EPSILON = 0.1  # epsilon parameter for RMSProp
-CHECKPOINT_DIR = 'checkpoints_center'
-LOG_FILE = 'tmp/a3c_log_doom_defend_center'
+CHECKPOINT_DIR = 'checkpoints_deathmatch'
+LOG_FILE = 'tmp/a3c_log_doom_deathmatch'
 INITIAL_ALPHA_LOW = 1e-4  # log_uniform low limit for learning rate
 INITIAL_ALPHA_HIGH = 1e-2  # log_uniform high limit for learning rate
 
-PARALLEL_SIZE = 3  # parallel thread size
+PARALLEL_SIZE = 1  # parallel thread size
 ROM = "pong.bin"  # action size = 3
 ACTION_SIZE = 3  # action size
 
