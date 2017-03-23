@@ -128,7 +128,7 @@ def train_function(parallel_index):
 
     while True:
         if thread_counter == 0:
-            thread_counter = 2
+            thread_counter = 30
             print("Thread", parallel_index, ": Starting Test Game")
             training_thread.run_test_game(sess)
             print("Thread", parallel_index, ": Ending Test Game")
