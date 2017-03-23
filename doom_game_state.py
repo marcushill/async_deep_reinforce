@@ -105,8 +105,6 @@ class DoomGameState:
         self.last_variables[GameVariable.KILLCOUNT] = self.game.get_game_variable(GameVariable.KILLCOUNT)
         self.last_variables[GameVariable.FRAGCOUNT] = self.game.get_game_variable(GameVariable.FRAGCOUNT)
         self.last_variables[GameVariable.SELECTED_WEAPON_AMMO] = self.game.get_game_variable(GameVariable.SELECTED_WEAPON_AMMO)
-        self.last_variables[GameVariable.POSITION_X] = self.game.get_game_variable(GameVariable.POSITION_X)
-        self.last_variables[GameVariable.POSITION_Y] = self.game.get_game_variable(GameVariable.POSITION_Y)
 
         if old_variables == {}:
             return r
@@ -131,9 +129,6 @@ class DoomGameState:
             r += (diff_dict[GameVariable.SELECTED_WEAPON_AMMO] * 0.15)
 
         # Displacement -- just encouraging movement
-        last_place = (old_variables[GameVariable.POSITION_X], old_variables[GameVariable.POSITION_Y])
-        new_place = (self.last_variables[GameVariable.POSITION_X], self.last_variables[GameVariable.POSITION_Y])
-        r += distance.euclidean(last_place, new_place) * 4e-5
         return r
 
     def update(self):

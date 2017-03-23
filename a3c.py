@@ -126,7 +126,7 @@ def train_function(parallel_index):
     # set start_time
     start_time = time.time() - wall_t
     training_thread.set_start_time(start_time)
-    thread_counter = 1
+    thread_counter = 0
 
     while True:
         if thread_counter == 0:
@@ -159,6 +159,7 @@ signal.signal(signal.SIGINT, signal_handler)
 # set start time
 start_time = time.time() - wall_t
 
+print('Starting', len(train_threads), 'threads.')
 for t in train_threads:
     t.start()
 
