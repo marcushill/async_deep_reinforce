@@ -48,7 +48,7 @@ class DoomGameState:
         if frame is None:
             return reward, None
         # print(frame.shape)
-        frame = frame[:, 10:-10, 30:-30]
+        frame = frame[10:-10, 30:-30]
         frame = scipy.misc.imresize(frame, [84, 84])
         # print("After Resize: ", frame.shape)
         if reshape:
