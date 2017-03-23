@@ -1,5 +1,6 @@
 import scipy
 import scipy.misc
+from scipy.spatial import distance
 from vizdoom.vizdoom import DoomGame, ScreenResolution, ScreenFormat, Button, GameVariable, Mode
 import numpy as np
 
@@ -31,6 +32,8 @@ class DoomGameState:
         # In preparation for actually using config files....
         self.real_actions = [[i == j for i in range(game.get_available_buttons_size())]
                              for j in range(game.get_available_buttons_size())]
+
+        self.last_variables = None
 
         self.reset()
         game.init()
@@ -64,8 +67,9 @@ class DoomGameState:
     def reset(self):
         self.reward = 0
 
-    def start(self):
-        self.game.new_episode()
+    def start(self, name=""):
+        self.last_variables = None
+        self.game.new_episode(name)
 
         # Add specific number of bots
         # (file examples/bots.cfg must be placed in the same directory as the Doom executable file,
@@ -81,7 +85,7 @@ class DoomGameState:
         real_action = self.real_actions[action]
 
         reward, frame = self._process_frame(real_action, True)
-        self.reward = reward
+        self.reward = self.__calculate_reward(reward)
 
         # self.s_t is the state over time an 84x84x4 3-dimensional matrix
         # self.s_t1 is taking the original s_t array which you can think of as a
@@ -91,6 +95,46 @@ class DoomGameState:
             # print('s_t shape', self.s_t.shape)
             # print('frame shape', frame.shape)
             self.s_t1 = np.append(self.s_t[1:, :, :, :], frame, axis=0)
+
+    def __calculate_reward(self, r):
+        if self.last_variables is None:
+            self.last_variables = {}
+        old_variables = self.last_variables.copy()
+
+        self.last_variables[GameVariable.HEALTH] = self.game.get_game_variable(GameVariable.HEALTH)
+        self.last_variables[GameVariable.KILLCOUNT] = self.game.get_game_variable(GameVariable.KILLCOUNT)
+        self.last_variables[GameVariable.FRAGCOUNT] = self.game.get_game_variable(GameVariable.FRAGCOUNT)
+        self.last_variables[GameVariable.SELECTED_WEAPON_AMMO] = self.game.get_game_variable(GameVariable.SELECTED_WEAPON_AMMO)
+        self.last_variables[GameVariable.POSITION_X] = self.game.get_game_variable(GameVariable.POSITION_X)
+        self.last_variables[GameVariable.POSITION_Y] = self.game.get_game_variable(GameVariable.POSITION_Y)
+
+        if old_variables == {}:
+            return r
+
+        diff_dict = {k: old_variables[k] - self.last_variables[k] for k in old_variables.keys()}
+        # Health
+        if diff_dict[GameVariable.HEALTH] < 0:
+            r += (diff_dict[GameVariable.HEALTH] * 0.03)
+        else:
+            r += (diff_dict[GameVariable.HEALTH] * 0.04)
+
+        # Kill count
+        r += diff_dict[GameVariable.KILLCOUNT] * 0.3
+
+        # Frag count
+        r += diff_dict[GameVariable.FRAGCOUNT] * 1.5
+
+        # Health
+        if diff_dict[GameVariable.SELECTED_WEAPON_AMMO] < 0:
+            r += (diff_dict[GameVariable.SELECTED_WEAPON_AMMO] * 0.04)
+        else:
+            r += (diff_dict[GameVariable.SELECTED_WEAPON_AMMO] * 0.15)
+
+        # Displacement -- just encouraging movement
+        last_place = (old_variables[GameVariable.POSITION_X], old_variables[GameVariable.POSITION_Y])
+        new_place = (self.last_variables[GameVariable.POSITION_X], self.last_variables[GameVariable.POSITION_Y])
+        r += distance.euclidean(last_place, new_place) * 4e-5
+        return r
 
     def update(self):
         self.s_t = self.s_t1
