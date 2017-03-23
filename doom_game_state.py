@@ -52,7 +52,7 @@ class DoomGameState:
         frame = scipy.misc.imresize(frame, [84, 84])
         # print("After Resize: ", frame.shape)
         if reshape:
-            frame = np.reshape(frame, (1, 84, 84, 3))
+            frame = np.reshape(frame, (84, 84, 1))
 
         frame = frame.astype(np.float32)
         frame *= (1.0 / 255.0)
@@ -79,7 +79,7 @@ class DoomGameState:
             self.game.send_game_command("addbot")
 
         _, screen = self._process_frame(None, False)
-        self.s_t = np.stack((screen, screen, screen, screen), axis=0)
+        self.s_t = np.stack((screen, screen, screen, screen), axis=2)
 
     def process(self, action):
         real_action = self.real_actions[action]
@@ -94,7 +94,7 @@ class DoomGameState:
         if frame is not None:
             # print('s_t shape', self.s_t.shape)
             # print('frame shape', frame.shape)
-            self.s_t1 = np.append(self.s_t[1:, :, :, :], frame, axis=0)
+            self.s_t1 = np.append(self.s_t[:, :, 1:], frame, axis=2)
 
     def __calculate_reward(self, r):
         if self.last_variables is None:
