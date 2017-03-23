@@ -14,7 +14,7 @@ class DoomGameState:
 
         game.set_doom_map("map01")  # Limited deathmatch.
         # game.set_doom_map("map02")  # Full deathmatch.
-        # game.set_window_visible(True)
+        game.set_window_visible(False)
 
         # Start multiplayer game only with your AI (with options that will be used in the competition, details in cig_host example).
         game.add_game_args("-host 1 -deathmatch +timelimit 1.0 "
