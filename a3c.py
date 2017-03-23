@@ -112,6 +112,11 @@ else:
     wall_t = 0.0
 
 
+def choose_action(pi_values):
+    return np.random.choice(range(len(pi_values)), p=pi_values)
+
+
+
 def train_function(parallel_index):
     global global_t
 
@@ -119,14 +124,22 @@ def train_function(parallel_index):
     # set start_time
     start_time = time.time() - wall_t
     training_thread.set_start_time(start_time)
+    thread_counter = 0
 
     while True:
+        if thread_counter == 0:
+            thread_counter = 2
+            print("Thread", parallel_index, ": Starting Test Game")
+            training_thread.run_test_game(sess)
+            print("Thread", parallel_index, ": Ending Test Game")
+
         if stop_requested or global_t > MAX_TIME_STEP:
             break
 
         diff_global_t = training_thread.process(sess, global_t, summary_writer,
                                                 summary_op, score_input)
         global_t += diff_global_t
+        thread_counter -= 1
 
 
 def signal_handler(signal, frame):

@@ -242,3 +242,16 @@ class A3CTrainingThread(object):
                                            batch_td,
                                            batch_R,
                                            cur_learning_rate)
+
+    def run_test_game(self, sess):
+        self.game.reset()
+        self.game.start("saves/doom_thread{}_{}.lmp".format(str(self.thread_index), str(time.time())))
+        while not self.game.terminal:
+            pi_values = self.local_network.run_policy(sess, self.game.s_t)
+
+            action = np.random.choice(range(len(pi_values)), p=pi_values)
+            self.game.process(action)
+        self.game.game.close()
+        self.game.game.init()
+        self.game.reset()
+

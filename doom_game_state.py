@@ -46,8 +46,8 @@ class DoomGameState:
     def reset(self):
         self.reward = 0
 
-    def start(self):
-        self.game.new_episode()
+    def start(self, name=""):
+        self.game.new_episode(name)
         _, screen = self._process_frame(None, False)
         self.s_t = np.stack((screen, screen, screen, screen), axis=2)
 
