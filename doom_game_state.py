@@ -23,6 +23,8 @@ class DoomGameState:
         # Name your agent and select color
         # colors: 0 - green, 1 - gray, 2 - brown, 3 - red, 4 - light gray, 5 - light brown, 6 - light red, 7 - light blue
         game.add_game_args("+name AI +colorset 0")
+        game.add_available_game_variable(GameVariable.POSITION_X)
+        game.add_available_game_variable(GameVariable.POSITION_Y)
 
 
 
@@ -34,6 +36,7 @@ class DoomGameState:
                              for j in range(game.get_available_buttons_size())]
 
         self.last_variables = None
+        self.position_buffer = None
 
         self.reset()
         game.init()
@@ -69,6 +72,8 @@ class DoomGameState:
 
     def start(self, name=""):
         self.last_variables = None
+        self.position_buffer = None
+
         self.game.new_episode(name)
 
         # Add specific number of bots
@@ -97,9 +102,18 @@ class DoomGameState:
             self.s_t1 = np.append(self.s_t[:, :, 1:], frame, axis=2)
 
     def __calculate_reward(self, r):
-        if self.last_variables is None:
+        if self.last_variables is None or self.game.is_player_dead():
+            # We want to reset everything if the player died
             self.last_variables = {}
+            self.initial_position = (self.game.get_game_variable(GameVariable.POSITION_X),
+                                     self.game.get_game_variable(GameVariable.POSITION_Y))
+            self.position_buffer = []
+
         old_variables = self.last_variables.copy()
+
+        current_position = (self.game.get_game_variable(GameVariable.POSITION_X),
+                            self.game.get_game_variable(GameVariable.POSITION_Y))
+        self.position_buffer.append(current_position)
 
         self.last_variables[GameVariable.HEALTH] = self.game.get_game_variable(GameVariable.HEALTH)
         self.last_variables[GameVariable.KILLCOUNT] = self.game.get_game_variable(GameVariable.KILLCOUNT)
@@ -111,24 +125,30 @@ class DoomGameState:
 
         diff_dict = {k: old_variables[k] - self.last_variables[k] for k in old_variables.keys()}
         # Health
-        if diff_dict[GameVariable.HEALTH] < 0:
-            r += (diff_dict[GameVariable.HEALTH] * 0.03)
-        else:
-            r += (diff_dict[GameVariable.HEALTH] * 0.04)
+        if diff_dict[GameVariable.HEALTH] < 0:  # Old Health less than new health
+            r += (diff_dict[GameVariable.HEALTH] * -0.04)
+        else:  # old health > new health
+            r -= (diff_dict[GameVariable.HEALTH] * 0.03)
 
         # Kill count
-        r += diff_dict[GameVariable.KILLCOUNT] * 0.3
+        r += diff_dict[GameVariable.KILLCOUNT] * -0.3
 
         # Frag count
-        r += diff_dict[GameVariable.FRAGCOUNT] * 1.5
+        r += diff_dict[GameVariable.FRAGCOUNT] * -1.5
 
-        # Health
-        if diff_dict[GameVariable.SELECTED_WEAPON_AMMO] < 0:
-            r += (diff_dict[GameVariable.SELECTED_WEAPON_AMMO] * 0.04)
+        # Ammo
+        if diff_dict[GameVariable.SELECTED_WEAPON_AMMO] < 0:  # Old Ammo < New Ammo
+            r += (diff_dict[GameVariable.SELECTED_WEAPON_AMMO] * -0.15)
         else:
-            r += (diff_dict[GameVariable.SELECTED_WEAPON_AMMO] * 0.15)
+            r -= (diff_dict[GameVariable.SELECTED_WEAPON_AMMO] * 0.04)
 
         # Displacement -- just encouraging movement
+        last_place = self.position_buffer[0]
+        r += distance.euclidean(last_place, current_position) * 4e-5
+
+        if len(self.position_buffer) > 40:  # 40 is the number of positions we're keeping
+            self.position_buffer = self.position_buffer[1:]
+
         return r
 
     def update(self):

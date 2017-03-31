@@ -64,7 +64,7 @@ class A3CTrainingThread(object):
 
         self.episode_reward = 0
 
-        # variable controling log output
+        # variable controlling log output
         self.prev_local_t = 0
 
     def _anneal_learning_rate(self, global_time_step):
