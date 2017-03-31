@@ -181,7 +181,7 @@ class GameACLSTMNetwork(GameACNetwork):
 
         scope_name = "net_" + str(self._thread_index)
         with tf.device(self._device), tf.variable_scope(scope_name) as scope:
-            self.W_conv1, self.b_conv1 = self._conv_variable([8, 8, 4, 16])  # stride=4
+            self.W_conv1, self.b_conv1 = self._conv_variable([8, 8, 3, 16])  # stride=4
             self.W_conv2, self.b_conv2 = self._conv_variable([4, 4, 16, 32])  # stride=2
 
             self.W_fc1, self.b_fc1 = self._fc_variable([2592, 256])
@@ -196,13 +196,13 @@ class GameACLSTMNetwork(GameACNetwork):
             self.W_fc3, self.b_fc3 = self._fc_variable([256, 1])
 
             # state (input)
-            self.s = tf.placeholder("float", [None, 84, 84, 4])
+            self.s = tf.placeholder("float", [None, 84, 84, 3])
 
-            h_conv1 = tf.nn.relu(self._conv2d(self.s, self.W_conv1, 4) + self.b_conv1)
-            h_conv2 = tf.nn.relu(self._conv2d(h_conv1, self.W_conv2, 2) + self.b_conv2)
+            h_conv1 = tf.nn.elu(self._conv2d(self.s, self.W_conv1, 4) + self.b_conv1)
+            h_conv2 = tf.nn.elu(self._conv2d(h_conv1, self.W_conv2, 2) + self.b_conv2)
 
             h_conv2_flat = tf.reshape(h_conv2, [-1, 2592])
-            h_fc1 = tf.nn.relu(tf.matmul(h_conv2_flat, self.W_fc1) + self.b_fc1)
+            h_fc1 = tf.nn.elu(tf.matmul(h_conv2_flat, self.W_fc1) + self.b_fc1)
             # h_fc1 shape=(5,256)
 
             h_fc1_reshaped = tf.reshape(h_fc1, [1, -1, 256])

@@ -49,11 +49,12 @@ global_t = 0
 
 stop_requested = False
 
-global_game = DoomGameState(scenario_path="scenarios/cig.cfg")
+global_game = DoomGameState(scenario_path="scenarios/cig.cfg", window_visible=True)
 if USE_LSTM:
     global_network = GameACLSTMNetwork(global_game.get_action_size(), -1, device)
 else:
     global_network = GameACFFNetwork(global_game.get_action_size(), -1, device)
+
 
 training_threads = []
 

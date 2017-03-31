@@ -6,7 +6,7 @@ import numpy as np
 
 
 class DoomGameState:
-    def __init__(self, scenario_path="scenarios/defend_center.cfg"):
+    def __init__(self, scenario_path="scenarios/defend_center.cfg", window_visible=False):
         self.reward = 0
         game = DoomGame()
         game.load_config(scenario_path)  # This corresponds to the simple task we will pose our agent\
@@ -14,7 +14,7 @@ class DoomGameState:
 
         game.set_doom_map("map01")  # Limited deathmatch.
         # game.set_doom_map("map02")  # Full deathmatch.
-        game.set_window_visible(False)
+        game.set_window_visible(window_visible)
 
         # Start multiplayer game only with your AI (with options that will be used in the competition, details in cig_host example).
         game.add_game_args("-host 1 -deathmatch +timelimit 1.0 "
@@ -43,7 +43,7 @@ class DoomGameState:
 
     def _process_frame(self, action, reshape):
         if action is not None:
-            reward = self.game.make_action(action) / 100.0
+            reward = self.game.make_action(action)
         else:
             reward = None
 
@@ -51,11 +51,11 @@ class DoomGameState:
         if frame is None:
             return reward, None
         # print(frame.shape)
-        frame = frame[10:-10, 30:-30]
+        # frame = frame[10:-10, 30:-30]
         frame = scipy.misc.imresize(frame, [84, 84])
         # print("After Resize: ", frame.shape)
-        if reshape:
-            frame = np.reshape(frame, (84, 84, 1))
+        # if reshape:
+        #     frame = np.reshape(frame, (84, 84, 1))
 
         frame = frame.astype(np.float32)
         frame *= (1.0 / 255.0)
@@ -69,6 +69,10 @@ class DoomGameState:
 
     def reset(self):
         self.reward = 0
+
+    @property
+    def score(self):
+        return self.game.get_game_variable(GameVariable.FRAGCOUNT)
 
     def start(self, name=""):
         self.last_variables = None
@@ -84,22 +88,26 @@ class DoomGameState:
             self.game.send_game_command("addbot")
 
         _, screen = self._process_frame(None, False)
-        self.s_t = np.stack((screen, screen, screen, screen), axis=2)
+        # self.s_t = np.stack((screen, screen, screen, screen), axis=2)
+        self.s_t = screen
 
     def process(self, action):
         real_action = self.real_actions[action]
 
         reward, frame = self._process_frame(real_action, True)
+        # print("Before reward:", reward)
         self.reward = self.__calculate_reward(reward)
+        # print("After reward: ", self.reward)
 
         # self.s_t is the state over time an 84x84x4 3-dimensional matrix
         # self.s_t1 is taking the original s_t array which you can think of as a
         # 1-dimensional array of 4 frames, it's slicing the array so that it is now of length 3
         # and then it appends a new frame to the end of this 1-dimensional array
-        if frame is not None:
-            # print('s_t shape', self.s_t.shape)
-            # print('frame shape', frame.shape)
-            self.s_t1 = np.append(self.s_t[:, :, 1:], frame, axis=2)
+        # if frame is not None:
+        # print('s_t shape', self.s_t.shape)
+        # print('frame shape', frame.shape)
+        # self.s_t1 = np.append(self.s_t[:, :, 1:], frame, axis=2)
+        self.s_t1 = frame
 
     def __calculate_reward(self, r):
         if self.last_variables is None or self.game.is_player_dead():
@@ -131,22 +139,22 @@ class DoomGameState:
             r -= (diff_dict[GameVariable.HEALTH] * 0.03)
 
         # Kill count
-        r += diff_dict[GameVariable.KILLCOUNT] * -0.3
+        r += self.last_variables[GameVariable.KILLCOUNT] * 0.3
 
         # Frag count
-        r += diff_dict[GameVariable.FRAGCOUNT] * -1.5
+        r += self.last_variables[GameVariable.FRAGCOUNT] * 1.5
 
-        # Ammo
+        # # Ammo
         if diff_dict[GameVariable.SELECTED_WEAPON_AMMO] < 0:  # Old Ammo < New Ammo
             r += (diff_dict[GameVariable.SELECTED_WEAPON_AMMO] * -0.15)
-        else:
-            r -= (diff_dict[GameVariable.SELECTED_WEAPON_AMMO] * 0.04)
+        # else:
+        #     r -= (diff_dict[GameVariable.SELECTED_WEAPON_AMMO] * 0.04)
 
         # Displacement -- just encouraging movement
         last_place = self.position_buffer[0]
         r += distance.euclidean(last_place, current_position) * 4e-5
 
-        if len(self.position_buffer) > 40:  # 40 is the number of positions we're keeping
+        if len(self.position_buffer) > 20:  # 40 is the number of positions we're keeping
             self.position_buffer = self.position_buffer[1:]
 
         return r

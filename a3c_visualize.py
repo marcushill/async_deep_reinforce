@@ -1,12 +1,11 @@
 # -*- coding: utf-8 -*-
 import tensorflow as tf
 import numpy as np
-import cv2
 import sys
 import matplotlib.pyplot as plt
 import random
 
-from game_state import GameState
+from doom_game_state import DoomGameState
 from game_ac_network import GameACFFNetwork, GameACLSTMNetwork
 from a3c_training_thread import A3CTrainingThread
 from rmsprop_applier import RMSPropApplier
@@ -24,10 +23,12 @@ from constants import USE_LSTM
 # use CPU for weight visualize tool
 device = "/cpu:0"
 
+global_game = DoomGameState(scenario_path="scenarios/cig.cfg")
 if USE_LSTM:
-  global_network = GameACLSTMNetwork(ACTION_SIZE, -1, device)
+    global_network = GameACLSTMNetwork(global_game.get_action_size(), -1, device)
 else:
-  global_network = GameACFFNetwork(ACTION_SIZE, -1, device)
+    global_network = GameACFFNetwork(global_game.get_action_size(), -1, device)
+del global_game
 
 training_threads = []
 

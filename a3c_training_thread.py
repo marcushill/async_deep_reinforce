@@ -100,8 +100,6 @@ class A3CTrainingThread(object):
 
         start_local_t = self.local_t
 
-        # if USE_LSTM:
-        #     start_lstm_state = self.local_network.lstm_state_out
         self.local_network.start_train()
 
         try:
@@ -123,6 +121,7 @@ class A3CTrainingThread(object):
             if (self.thread_index == 0) and (self.local_t % LOG_INTERVAL == 0):
                 print("pi={}".format(pi_))
                 print(" V={}".format(value_))
+                print(" Score=", self.game.score)
 
             # process game
             self.game.process(action)
@@ -131,14 +130,14 @@ class A3CTrainingThread(object):
             reward = self.game.reward
             terminal = self.game.terminal
 
-            self.episode_reward += reward
+            # self.episode_reward += reward
 
             # clip reward
             rewards.append(np.clip(reward, -1, 1))
 
             self.local_t += 1
 
-            if len(actions) == 30 and not self.game.terminal and episode_step_count < self.game.max_episode_length -1 :
+            if len(actions) == 30 and not self.game.terminal and episode_step_count < self.game.max_episode_length -1:
                 value = self.local_network.run_value(sess, self.game.s_t)
                 self.train(sess, global_t, actions, states, rewards, values, value)
                 states = []
@@ -152,15 +151,12 @@ class A3CTrainingThread(object):
 
             if terminal:
                 terminal_end = True
-                print("score={}".format(self.episode_reward))
+                print("score={}".format(self.game.score))
 
                 self._record_score(sess, summary_writer, summary_op, score_input,
-                                   self.episode_reward, global_t)
+                                   self.game.score, global_t)
 
-                self.episode_reward = 0
                 self.game.reset()
-                # if USE_LSTM:
-                #     self.local_network.reset_state()
                 try:
                     self.local_network.reset_state()
                 except AttributeError:
@@ -171,33 +167,7 @@ class A3CTrainingThread(object):
         if not terminal_end:
             R = self.local_network.run_value(sess, self.game.s_t)
 
-
-        # The other code does the below every 30 frames
-        actions.reverse()
-        states.reverse()
-        rewards.reverse()
-        values.reverse()
-
-        batch_si = []
-        batch_a = []
-        batch_td = []
-        batch_R = []
-
-        # compute and accmulate gradients
-        for (ai, ri, si, Vi) in zip(actions, rewards, states, values):
-            R = ri + GAMMA * R
-            td = R - Vi
-            a = np.zeros([self.game.get_action_size()])
-            a[ai] = 1
-
-            batch_si.append(si)
-            batch_a.append(a)
-            batch_td.append(td)
-            batch_R.append(R)
-
-        cur_learning_rate = self._anneal_learning_rate(global_t)
-
-        self.local_network.apply_gradients(sess, self.apply_gradients, batch_si, batch_a, batch_td, batch_R, cur_learning_rate)
+        self.train(sess, global_t, actions, states, rewards, values, R)
 
         if (self.thread_index == 0) and (self.local_t - self.prev_local_t >= PERFORMANCE_LOG_INTERVAL):
             self.prev_local_t += PERFORMANCE_LOG_INTERVAL
