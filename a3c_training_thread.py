@@ -110,7 +110,14 @@ class A3CTrainingThread(object):
         # t_max times loop
         # for i in range(LOCAL_T_MAX):
         episode_step_count = 1
+        skip_counter = 4
         while not self.game.terminal:
+            if skip_counter != 4:
+                skip_counter += 1
+                self.game.process(action)
+            else:
+                skip_counter = 0
+
             pi_, value_ = self.local_network.run_policy_and_value(sess, self.game.s_t)
             action = self.choose_action(pi_)
 
@@ -119,9 +126,10 @@ class A3CTrainingThread(object):
             values.append(value_)
 
             if (self.thread_index == 0) and (self.local_t % LOG_INTERVAL == 0):
-                print("pi={}".format(pi_))
-                print(" V={}".format(value_))
+                print("    pi= {}".format(pi_))
+                print("     V= {}".format(value_))
                 print(" Score=", self.game.score)
+                print("Reward=", self.game.reward)
 
             # process game
             self.game.process(action)

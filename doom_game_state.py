@@ -26,8 +26,6 @@ class DoomGameState:
         game.add_available_game_variable(GameVariable.POSITION_X)
         game.add_available_game_variable(GameVariable.POSITION_Y)
 
-
-
         self.game = game
 
         # generates the the actual action arrays [True, False, False], etc for each action...
@@ -54,8 +52,8 @@ class DoomGameState:
         # frame = frame[10:-10, 30:-30]
         frame = scipy.misc.imresize(frame, [84, 84])
         # print("After Resize: ", frame.shape)
-        # if reshape:
-        #     frame = np.reshape(frame, (84, 84, 1))
+        if reshape:
+            frame = np.reshape(frame, (1, 84, 84, 3))
 
         frame = frame.astype(np.float32)
         frame *= (1.0 / 255.0)
@@ -88,8 +86,7 @@ class DoomGameState:
             self.game.send_game_command("addbot")
 
         _, screen = self._process_frame(None, False)
-        # self.s_t = np.stack((screen, screen, screen, screen), axis=2)
-        self.s_t = screen
+        self.s_t = np.stack((screen, screen, screen, screen), axis=0)
 
     def process(self, action):
         real_action = self.real_actions[action]
@@ -103,11 +100,10 @@ class DoomGameState:
         # self.s_t1 is taking the original s_t array which you can think of as a
         # 1-dimensional array of 4 frames, it's slicing the array so that it is now of length 3
         # and then it appends a new frame to the end of this 1-dimensional array
-        # if frame is not None:
-        # print('s_t shape', self.s_t.shape)
-        # print('frame shape', frame.shape)
-        # self.s_t1 = np.append(self.s_t[:, :, 1:], frame, axis=2)
-        self.s_t1 = frame
+        if frame is not None:
+            #        print('s_t shape', self.s_t.shape)
+            #        print('frame shape', frame.shape)
+            self.s_t1 = np.append(self.s_t[1:, :, :, :], frame, axis=0)
 
     def __calculate_reward(self, r):
         if self.last_variables is None or self.game.is_player_dead():
@@ -126,7 +122,8 @@ class DoomGameState:
         self.last_variables[GameVariable.HEALTH] = self.game.get_game_variable(GameVariable.HEALTH)
         self.last_variables[GameVariable.KILLCOUNT] = self.game.get_game_variable(GameVariable.KILLCOUNT)
         self.last_variables[GameVariable.FRAGCOUNT] = self.game.get_game_variable(GameVariable.FRAGCOUNT)
-        self.last_variables[GameVariable.SELECTED_WEAPON_AMMO] = self.game.get_game_variable(GameVariable.SELECTED_WEAPON_AMMO)
+        self.last_variables[GameVariable.SELECTED_WEAPON_AMMO] = self.game.get_game_variable(
+            GameVariable.SELECTED_WEAPON_AMMO)
 
         if old_variables == {}:
             return r
@@ -147,14 +144,16 @@ class DoomGameState:
         # # Ammo
         if diff_dict[GameVariable.SELECTED_WEAPON_AMMO] < 0:  # Old Ammo < New Ammo
             r += (diff_dict[GameVariable.SELECTED_WEAPON_AMMO] * -0.15)
-        # else:
-        #     r -= (diff_dict[GameVariable.SELECTED_WEAPON_AMMO] * 0.04)
+        else:
+            r -= (diff_dict[GameVariable.SELECTED_WEAPON_AMMO] * 0.04)
 
         # Displacement -- just encouraging movement
         last_place = self.position_buffer[0]
-        r += distance.euclidean(last_place, current_position) * 4e-5
-
-        if len(self.position_buffer) > 20:  # 40 is the number of positions we're keeping
+        distance_moved = distance.euclidean(last_place, current_position) * 4e-3
+        if (distance_moved == 0):
+            r -= .5
+        r += distance_moved
+        if len(self.position_buffer) > 50:  # 40 is the number of positions we're keeping
             self.position_buffer = self.position_buffer[1:]
 
         return r

@@ -89,18 +89,19 @@ class GameACNetwork(object):
         return weight, bias
 
     def _conv_variable(self, weight_shape):
-        w = weight_shape[0]
-        h = weight_shape[1]
-        input_channels = weight_shape[2]
-        output_channels = weight_shape[3]
-        d = 1.0 / np.sqrt(input_channels * w * h)
+        depth = weight_shape[0]
+        w = weight_shape[1]
+        h = weight_shape[2]
+        input_channels = weight_shape[3]
+        output_channels = weight_shape[4]
+        d = 1.0 / np.sqrt(input_channels * depth * w * h)
         bias_shape = [output_channels]
         weight = tf.Variable(tf.random_uniform(weight_shape, minval=-d, maxval=d))
         bias = tf.Variable(tf.random_uniform(bias_shape, minval=-d, maxval=d))
         return weight, bias
 
     def _conv2d(self, x, W, stride):
-        return tf.nn.conv2d(x, W, strides=[1, stride, stride, 1], padding="VALID")
+        return tf.nn.conv3d(x, W, strides=[1, stride, stride, stride, 1], padding="VALID")
 
 
 # Actor-Critic FF Network
@@ -181,8 +182,8 @@ class GameACLSTMNetwork(GameACNetwork):
 
         scope_name = "net_" + str(self._thread_index)
         with tf.device(self._device), tf.variable_scope(scope_name) as scope:
-            self.W_conv1, self.b_conv1 = self._conv_variable([8, 8, 3, 16])  # stride=4
-            self.W_conv2, self.b_conv2 = self._conv_variable([4, 4, 16, 32])  # stride=2
+            self.W_conv1, self.b_conv1 = self._conv_variable([2, 8, 8, 3, 16])  # stride=4
+            self.W_conv2, self.b_conv2 = self._conv_variable([1, 4, 4, 16, 32])  # stride=2
 
             self.W_fc1, self.b_fc1 = self._fc_variable([2592, 256])
 
@@ -196,7 +197,7 @@ class GameACLSTMNetwork(GameACNetwork):
             self.W_fc3, self.b_fc3 = self._fc_variable([256, 1])
 
             # state (input)
-            self.s = tf.placeholder("float", [None, 84, 84, 3])
+            self.s = tf.placeholder("float", [None, 4, 84, 84, 3])
 
             h_conv1 = tf.nn.elu(self._conv2d(self.s, self.W_conv1, 4) + self.b_conv1)
             h_conv2 = tf.nn.elu(self._conv2d(h_conv1, self.W_conv2, 2) + self.b_conv2)

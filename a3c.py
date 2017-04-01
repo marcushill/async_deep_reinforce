@@ -68,7 +68,7 @@ grad_applier = RMSPropApplier(learning_rate=learning_rate_input,
                               device=device)
 
 for i in range(PARALLEL_SIZE):
-    game = DoomGameState(scenario_path="scenarios/cig.cfg")
+    game = DoomGameState(scenario_path="scenarios/cig.cfg", window_visible=i == 0)
     if USE_LSTM:
         local_network = GameACLSTMNetwork(game.get_action_size(), i, learning_rate_input, device)
     else:
