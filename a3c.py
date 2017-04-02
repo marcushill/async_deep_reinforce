@@ -126,10 +126,10 @@ def train_function(parallel_index):
     # set start_time
     start_time = time.time() - wall_t
     training_thread.set_start_time(start_time)
-    thread_counter = 30
+    thread_counter = 0
 
     while True:
-        if thread_counter == 0:
+        if thread_counter == 0 and parallel_index == 0:
             thread_counter = 30
             print("Thread", parallel_index, ": Starting Test Game")
             training_thread.run_test_game(sess)
@@ -154,6 +154,7 @@ train_threads = []
 for i in range(PARALLEL_SIZE):
     train_threads.append(threading.Thread(target=train_function, args=(i,)))
 
+
 signal.signal(signal.SIGINT, signal_handler)
 
 # set start time
@@ -164,7 +165,10 @@ for t in train_threads:
     t.start()
 
 print('Press Ctrl+C to stop')
-signal.pause()
+while not stop_requested:
+    pass # Busy wait
+print("Hi")
+# signal.pause()
 
 print('Now saving data. Please wait')
 

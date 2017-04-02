@@ -55,7 +55,6 @@ if USE_LSTM:
 else:
     global_network = GameACFFNetwork(global_game.get_action_size(), -1, device)
 
-
 training_threads = []
 
 learning_rate_input = tf.placeholder("float")
@@ -67,7 +66,6 @@ grad_applier = RMSPropApplier(learning_rate=learning_rate_input,
                               clip_norm=GRAD_NORM_CLIP,
                               device=device)
 
-
 sess = tf.Session()
 init = tf.global_variables_initializer()
 sess.run(init)
@@ -75,26 +73,27 @@ sess.run(init)
 saver = tf.train.Saver()
 checkpoint = tf.train.get_checkpoint_state(CHECKPOINT_DIR)
 if checkpoint and checkpoint.model_checkpoint_path:
-  saver.restore(sess, checkpoint.model_checkpoint_path)
-  print("checkpoint loaded:", checkpoint.model_checkpoint_path)
+    saver.restore(sess, checkpoint.model_checkpoint_path)
+    print("checkpoint loaded:", checkpoint.model_checkpoint_path)
 else:
-  print("Could not find old checkpoint")
+    print("Could not find old checkpoint")
 
 
 def choose_action(pi_values):
     return np.random.choice(range(len(pi_values)), p=pi_values)
 
+
 global_game.start()
 while True:
-  pi_values = global_network.run_policy(sess, global_game.s_t)
+    pi_values = global_network.run_policy(sess, global_game.s_t)
 
-  action = choose_action(pi_values)
-  print("Policy: ", pi_values)
-  print("Action: ", action)
-  global_game.process(action)
+    action = choose_action(pi_values)
+    print("Policy: ", pi_values)
+    print("Action: ", action)
+    global_game.process(action)
 
-  if global_game.terminal:
-    global_game.reset()
-    global_game.start()
-  else:
-    global_game.update()
+    if global_game.terminal:
+        global_game.reset()
+        global_game.start()
+    else:
+        global_game.update()

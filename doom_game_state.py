@@ -1,8 +1,11 @@
+from itertools import combinations_with_replacement, product
+
+from vizdoom.vizdoom import DoomGame, ScreenResolution, ScreenFormat, Button, GameVariable, Mode
 import scipy
 import scipy.misc
 from scipy.spatial import distance
-from vizdoom.vizdoom import DoomGame, ScreenResolution, ScreenFormat, Button, GameVariable, Mode
 import numpy as np
+from constants import FRAME_SKIP
 
 
 class DoomGameState:
@@ -29,9 +32,9 @@ class DoomGameState:
         self.game = game
 
         # generates the the actual action arrays [True, False, False], etc for each action...
-        # In preparation for actually using config files....
-        self.real_actions = [[i == j for i in range(game.get_available_buttons_size())]
-                             for j in range(game.get_available_buttons_size())]
+        # generates all possible button combinations which I learned from the original vizdoom paper
+        self.real_actions = [list(x) for x in
+                             product([True, False], repeat=game.get_available_buttons_size())]
 
         self.last_variables = None
         self.position_buffer = None
@@ -41,7 +44,7 @@ class DoomGameState:
 
     def _process_frame(self, action, reshape):
         if action is not None:
-            reward = self.game.make_action(action)
+            reward = self.game.make_action(action, FRAME_SKIP)
         else:
             reward = None
 
@@ -50,10 +53,10 @@ class DoomGameState:
             return reward, None
         # print(frame.shape)
         # frame = frame[10:-10, 30:-30]
-        frame = scipy.misc.imresize(frame, [84, 84])
+        frame = scipy.misc.imresize(frame, [160, 120])
         # print("After Resize: ", frame.shape)
         if reshape:
-            frame = np.reshape(frame, (1, 84, 84, 3))
+            frame = np.reshape(frame, (1, 160, 120, 3))
 
         frame = frame.astype(np.float32)
         frame *= (1.0 / 255.0)
@@ -88,9 +91,8 @@ class DoomGameState:
         _, screen = self._process_frame(None, False)
         self.s_t = np.stack((screen, screen, screen, screen), axis=0)
 
-    def process(self, action):
+    def process(self, action, is_skip=False):
         real_action = self.real_actions[action]
-
         reward, frame = self._process_frame(real_action, True)
         # print("Before reward:", reward)
         self.reward = self.__calculate_reward(reward)
@@ -149,11 +151,11 @@ class DoomGameState:
 
         # Displacement -- just encouraging movement
         last_place = self.position_buffer[0]
-        distance_moved = distance.euclidean(last_place, current_position) * 4e-3
-        if (distance_moved == 0):
+        distance_moved = distance.euclidean(last_place, current_position) * 4e-5
+        if distance_moved == 0:
             r -= .5
         r += distance_moved
-        if len(self.position_buffer) > 50:  # 40 is the number of positions we're keeping
+        if len(self.position_buffer) > 10:  # 10 is the number of positions we're keeping
             self.position_buffer = self.position_buffer[1:]
 
         return r

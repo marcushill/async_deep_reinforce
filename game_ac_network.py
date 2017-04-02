@@ -128,7 +128,7 @@ class GameACFFNetwork(GameACNetwork):
 
             # state (input)
             # None as the first argument mean we could give it N images at once of the 84x84x4 shape
-            self.s = tf.placeholder("float", [None, 3, 84, 84, 4])
+            self.s = tf.placeholder("float", [None, 3, 60, 80, 4])
 
             h_conv1 = tf.nn.relu(self._conv2d(self.s, self.W_conv1, 4) + self.b_conv1)
             h_conv2 = tf.nn.relu(self._conv2d(h_conv1, self.W_conv2, 2) + self.b_conv2)
@@ -185,7 +185,7 @@ class GameACLSTMNetwork(GameACNetwork):
             self.W_conv1, self.b_conv1 = self._conv_variable([2, 8, 8, 3, 16])  # stride=4
             self.W_conv2, self.b_conv2 = self._conv_variable([1, 4, 4, 16, 32])  # stride=2
 
-            self.W_fc1, self.b_fc1 = self._fc_variable([2592, 256])
+            self.W_fc1, self.b_fc1 = self._fc_variable([7488, 256])
 
             # lstm
             self.lstm = tf.contrib.rnn.BasicLSTMCell(256, state_is_tuple=True)
@@ -197,12 +197,12 @@ class GameACLSTMNetwork(GameACNetwork):
             self.W_fc3, self.b_fc3 = self._fc_variable([256, 1])
 
             # state (input)
-            self.s = tf.placeholder("float", [None, 4, 84, 84, 3])
+            self.s = tf.placeholder("float", [None, 4, 160, 120, 3])
 
             h_conv1 = tf.nn.elu(self._conv2d(self.s, self.W_conv1, 4) + self.b_conv1)
             h_conv2 = tf.nn.elu(self._conv2d(h_conv1, self.W_conv2, 2) + self.b_conv2)
 
-            h_conv2_flat = tf.reshape(h_conv2, [-1, 2592])
+            h_conv2_flat = tf.reshape(h_conv2, [-1,  7488])
             h_fc1 = tf.nn.elu(tf.matmul(h_conv2_flat, self.W_fc1) + self.b_fc1)
             # h_fc1 shape=(5,256)
 

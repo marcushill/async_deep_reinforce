@@ -4,3 +4,5 @@ old/*
 checkpoints*/*
 .idea/
 saves/*
+vizdoom/*
+_vizdoom.ini
