@@ -124,7 +124,7 @@ class A3CTrainingThread(object):
             values.append(value_)
 
             if (self.thread_index == 0) and (self.local_t % LOG_INTERVAL == 0):
-                # print("    pi= {}".format(pi_))
+                print("    pi= {}".format(pi_))
                 print("Action=", action)
                 print("     V= {}".format(value_))
                 print(" Score=", self.game.score)

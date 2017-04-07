@@ -15,11 +15,11 @@ class DoomGameState:
         game.load_config(scenario_path)  # This corresponds to the simple task we will pose our agent\
         # game.load_config("../../scenarios/cig.cfg")
 
-        game.set_doom_map("map01")  # Limited deathmatch.
+        # game.set_doom_map("map01")  # Limited deathmatch.
         # game.set_doom_map("map02")  # Full deathmatch.
         game.set_window_visible(window_visible)
 
-        # Start multiplayer game only with your AI (with options that will be used in the competition, details in cig_host example).
+        # # Start multiplayer game only with your AI (with options that will be used in the competition, details in cig_host example).
         game.add_game_args("-host 1 -deathmatch +timelimit 1.0 "
                            "+sv_forcerespawn 1 +sv_noautoaim 1 +sv_respawnprotect 1 +sv_spawnfarthest 1")
 
@@ -33,11 +33,14 @@ class DoomGameState:
 
         # generates the the actual action arrays [True, False, False], etc for each action...
         # generates all possible button combinations which I learned from the original vizdoom paper
-        self.real_actions = [list(x) for x in
-                             product([True, False], repeat=game.get_available_buttons_size())]
+        self.real_actions = [[i == j for i in range(game.get_available_buttons_size())]
+                             for j in range(game.get_available_buttons_size())]
+        # self.real_actions = [list(x) for x in
+        #                      product([True, False], repeat=game.get_available_buttons_size())]
 
         self.last_variables = None
         self.position_buffer = None
+        self.skip_next_round = False
 
         self.reset()
         game.init()
@@ -70,6 +73,10 @@ class DoomGameState:
 
     def reset(self):
         self.reward = 0
+        self.skip_next_round = False
+        self.kill_count = 0  # INCREMENT EACH TIME FRAGS INCREASES
+        self.death_count = 0  # INCREMENT EACH TIME DEATHCOUNT INCREASES
+        self.suicide_count = 0 # INCREMENT EACH TIME FRAG COUNT DECREASES
 
     @property
     def score(self):
@@ -84,9 +91,9 @@ class DoomGameState:
         # Add specific number of bots
         # (file examples/bots.cfg must be placed in the same directory as the Doom executable file,
         # edit this file to adjust bots).
-        self.game.send_game_command("removebots")
-        for i in range(7):
-            self.game.send_game_command("addbot")
+        # self.game.send_game_command("removebots")
+        # for i in range(7):
+        #     self.game.send_game_command("addbot")
 
         _, screen = self._process_frame(None, False)
         self.s_t = np.stack((screen, screen, screen, screen), axis=0)
@@ -108,12 +115,16 @@ class DoomGameState:
             self.s_t1 = np.append(self.s_t[1:, :, :, :], frame, axis=0)
 
     def __calculate_reward(self, r):
+        skip_round = self.skip_next_round
         if self.last_variables is None or self.game.is_player_dead():
             # We want to reset everything if the player died
             self.last_variables = {}
             self.initial_position = (self.game.get_game_variable(GameVariable.POSITION_X),
                                      self.game.get_game_variable(GameVariable.POSITION_Y))
             self.position_buffer = []
+            self.skip_next_round = True
+        else:
+            self.skip_next_round = False
 
         old_variables = self.last_variables.copy()
 
@@ -127,7 +138,7 @@ class DoomGameState:
         self.last_variables[GameVariable.SELECTED_WEAPON_AMMO] = self.game.get_game_variable(
             GameVariable.SELECTED_WEAPON_AMMO)
 
-        if old_variables == {}:
+        if skip_round or old_variables == {}:
             return r
 
         diff_dict = {k: old_variables[k] - self.last_variables[k] for k in old_variables.keys()}
@@ -155,16 +166,24 @@ class DoomGameState:
         if distance_moved == 0:
             r -= .5
         r += distance_moved
-        if len(self.position_buffer) > 10:  # 10 is the number of positions we're keeping
+        if len(self.position_buffer) > 1:
             self.position_buffer = self.position_buffer[1:]
 
-        return r
+        return max(r, 0)
 
     def update(self):
         self.s_t = self.s_t1
 
     def get_action_size(self):
         return len(self.real_actions)
+
+    @property
+    def labels_buffer(self):
+        return self.game.get_state().labels_buffer
+
+    @property
+    def labels(self):
+        return self.game.get_state().labels
 
     @property
     def max_episode_length(self):

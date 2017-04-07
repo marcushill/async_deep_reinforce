@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import cv2
 import tensorflow as tf
 import threading
 import numpy as np
@@ -9,6 +10,7 @@ import math
 import os
 import time
 
+from vizdoom import GameVariable
 from doom_game_state import DoomGameState
 from game_ac_network import GameACFFNetwork, GameACLSTMNetwork
 from a3c_training_thread import A3CTrainingThread
@@ -49,7 +51,7 @@ global_t = 0
 
 stop_requested = False
 
-global_game = DoomGameState(scenario_path="scenarios/cig.cfg", window_visible=True)
+global_game = DoomGameState(scenario_path="scenarios/deathmatch.cfg", window_visible=True)
 if USE_LSTM:
     global_network = GameACLSTMNetwork(global_game.get_action_size(), -1, device)
 else:
@@ -84,12 +86,33 @@ def choose_action(pi_values):
 
 
 global_game.start()
-while True:
+print(global_game.game.get_available_game_variables())
+while not global_game.terminal:
+    # labels = global_game.labels_buffer
+    # if labels is not None:
+    #     cv2.imshow('ViZDoom Labels Buffer', labels)
+    #
+    # cv2.waitKey(300)
+
+    # for l in global_game.labels:
+    #      print("Object id:", l.object_id, "object name:", l.object_name, "label:", l.value)
+    # #     print("Object position X:", l.object_position_x, "Y:", l.object_position_y, "Z:", l.object_position_z)
+    # print("Sees Enemy: ", any(x.object_name == "DoomPlayer" and x.value != 255 for x in global_game.labels))
+    #
+    print("Pre-reward: ", global_game.game.get_last_reward())
+    print("Kill Count: ", global_game.game.get_game_variable(GameVariable.KILLCOUNT))
+    print("Death Count: ", global_game.game.get_game_variable(GameVariable.USER1))
+    print("Frag Count: ", global_game.game.get_game_variable(GameVariable.FRAGCOUNT))
+    print("Reward: ", global_game.reward)
+    print("Total Reward: ", global_game.game.get_total_reward())
+    print("=====================")
+
+
     pi_values = global_network.run_policy(sess, global_game.s_t)
 
     action = choose_action(pi_values)
-    print("Policy: ", pi_values)
-    print("Action: ", action)
+    # print("Policy: ", pi_values)
+    # print("Action: ", action)
     global_game.process(action)
 
     if global_game.terminal:

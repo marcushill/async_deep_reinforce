@@ -62,9 +62,8 @@ class GameACNetwork(object):
     def apply_gradients(self, sess, apply_gradients, batch_si, batch_a, batch_td, batch_R, cur_learn_rate):
         raise NotImplementedError()
 
-
-    def sync_from(self, src_netowrk, name=None):
-        src_vars = src_netowrk.get_vars()
+    def sync_from(self, src_network, name=None):
+        src_vars = src_network.get_vars()
         dst_vars = self.get_vars()
 
         sync_ops = []
@@ -199,11 +198,11 @@ class GameACLSTMNetwork(GameACNetwork):
             # state (input)
             self.s = tf.placeholder("float", [None, 4, 160, 120, 3])
 
-            h_conv1 = tf.nn.elu(self._conv2d(self.s, self.W_conv1, 4) + self.b_conv1)
-            h_conv2 = tf.nn.elu(self._conv2d(h_conv1, self.W_conv2, 2) + self.b_conv2)
+            h_conv1 = tf.nn.relu(self._conv2d(self.s, self.W_conv1, 4) + self.b_conv1)
+            h_conv2 = tf.nn.relu(self._conv2d(h_conv1, self.W_conv2, 2) + self.b_conv2)
 
             h_conv2_flat = tf.reshape(h_conv2, [-1,  7488])
-            h_fc1 = tf.nn.elu(tf.matmul(h_conv2_flat, self.W_fc1) + self.b_fc1)
+            h_fc1 = tf.nn.relu(tf.matmul(h_conv2_flat, self.W_fc1) + self.b_fc1)
             # h_fc1 shape=(5,256)
 
             h_fc1_reshaped = tf.reshape(h_fc1, [1, -1, 256])
@@ -253,7 +252,6 @@ class GameACLSTMNetwork(GameACNetwork):
 
     def start_train(self):
         self.start_lstm_state = self.lstm_state_out
-
 
     def run_policy_and_value(self, sess, s_t):
         # This run_policy_and_value() is used when forward propagating.
