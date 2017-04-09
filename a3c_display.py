@@ -51,7 +51,7 @@ global_t = 0
 
 stop_requested = False
 
-global_game = DoomGameState(scenario_path="scenarios/deathmatch.cfg", window_visible=True)
+global_game = DoomGameState(scenario_path="scenarios/cig.cfg", window_visible=True)
 if USE_LSTM:
     global_network = GameACLSTMNetwork(global_game.get_action_size(), -1, device)
 else:
@@ -92,7 +92,7 @@ while not global_game.terminal:
     # if labels is not None:
     #     cv2.imshow('ViZDoom Labels Buffer', labels)
     #
-    # cv2.waitKey(300)
+    cv2.waitKey(300)
 
     # for l in global_game.labels:
     #      print("Object id:", l.object_id, "object name:", l.object_name, "label:", l.value)
@@ -100,8 +100,9 @@ while not global_game.terminal:
     # print("Sees Enemy: ", any(x.object_name == "DoomPlayer" and x.value != 255 for x in global_game.labels))
     #
     print("Pre-reward: ", global_game.game.get_last_reward())
-    print("Kill Count: ", global_game.game.get_game_variable(GameVariable.KILLCOUNT))
-    print("Death Count: ", global_game.game.get_game_variable(GameVariable.USER1))
+    print("Kill Count: ", global_game.kill_count)
+    print("Death Count: ", global_game.death_count)
+    print("Suicide Count: ", global_game.suicide_count)
     print("Frag Count: ", global_game.game.get_game_variable(GameVariable.FRAGCOUNT))
     print("Reward: ", global_game.reward)
     print("Total Reward: ", global_game.game.get_total_reward())
@@ -115,8 +116,5 @@ while not global_game.terminal:
     # print("Action: ", action)
     global_game.process(action)
 
-    if global_game.terminal:
-        global_game.reset()
-        global_game.start()
-    else:
+    if not global_game.terminal:
         global_game.update()

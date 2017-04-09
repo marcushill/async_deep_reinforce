@@ -75,8 +75,9 @@ class DoomGameState:
         self.reward = 0
         self.skip_next_round = False
         self.kill_count = 0  # INCREMENT EACH TIME FRAGS INCREASES
-        self.death_count = 0  # INCREMENT EACH TIME DEATHCOUNT INCREASES
+        self.death_count = 0  # INCREMENT EACH TIME WE DIE INCREASES
         self.suicide_count = 0 # INCREMENT EACH TIME FRAG COUNT DECREASES
+        self.in_dying_cycle = False
 
     @property
     def score(self):
@@ -91,9 +92,9 @@ class DoomGameState:
         # Add specific number of bots
         # (file examples/bots.cfg must be placed in the same directory as the Doom executable file,
         # edit this file to adjust bots).
-        # self.game.send_game_command("removebots")
-        # for i in range(7):
-        #     self.game.send_game_command("addbot")
+        self.game.send_game_command("removebots")
+        for i in range(7):
+            self.game.send_game_command("addbot")
 
         _, screen = self._process_frame(None, False)
         self.s_t = np.stack((screen, screen, screen, screen), axis=0)
@@ -115,21 +116,28 @@ class DoomGameState:
             self.s_t1 = np.append(self.s_t[1:, :, :, :], frame, axis=0)
 
     def __calculate_reward(self, r):
-        skip_round = self.skip_next_round
-        if self.last_variables is None or self.game.is_player_dead():
-            # We want to reset everything if the player died
-            self.last_variables = {}
-            self.initial_position = (self.game.get_game_variable(GameVariable.POSITION_X),
-                                     self.game.get_game_variable(GameVariable.POSITION_Y))
-            self.position_buffer = []
-            self.skip_next_round = True
-        else:
-            self.skip_next_round = False
-
-        old_variables = self.last_variables.copy()
-
+        was_dead = self.in_dying_cycle
         current_position = (self.game.get_game_variable(GameVariable.POSITION_X),
                             self.game.get_game_variable(GameVariable.POSITION_Y))
+
+        if self.last_variables is None:
+            # We want to reset everything if the player died
+            self.last_variables = {}
+            self.initial_position = current_position
+            self.position_buffer = []
+
+        if was_dead:
+            self.last_variables[GameVariable.HEALTH] = self.game.get_game_variable(GameVariable.HEALTH)
+            self.last_variables[GameVariable.SELECTED_WEAPON_AMMO] = self.game.get_game_variable(
+                GameVariable.SELECTED_WEAPON_AMMO)
+            self.position_buffer = [current_position]
+
+        if self.game.is_player_dead() and not was_dead:
+            self.death_count += 1
+
+        self.in_dying_cycle = self.game.is_player_dead()
+
+        old_variables = self.last_variables.copy()
         self.position_buffer.append(current_position)
 
         self.last_variables[GameVariable.HEALTH] = self.game.get_game_variable(GameVariable.HEALTH)
@@ -138,23 +146,27 @@ class DoomGameState:
         self.last_variables[GameVariable.SELECTED_WEAPON_AMMO] = self.game.get_game_variable(
             GameVariable.SELECTED_WEAPON_AMMO)
 
-        if skip_round or old_variables == {}:
+        if old_variables == {}:
             return r
 
         diff_dict = {k: old_variables[k] - self.last_variables[k] for k in old_variables.keys()}
+
+
         # Health
         if diff_dict[GameVariable.HEALTH] < 0:  # Old Health less than new health
             r += (diff_dict[GameVariable.HEALTH] * -0.04)
         else:  # old health > new health
             r -= (diff_dict[GameVariable.HEALTH] * 0.03)
 
-        # Kill count
-        r += self.last_variables[GameVariable.KILLCOUNT] * 0.3
-
         # Frag count
-        r += self.last_variables[GameVariable.FRAGCOUNT] * 1.5
+        r += diff_dict[GameVariable.FRAGCOUNT] * -1.5
 
-        # # Ammo
+        if diff_dict[GameVariable.FRAGCOUNT] > 0:  # Old frags > New frags
+            self.suicide_count += 1  # INCREMENT EACH TIME FRAG COUNT DECREASES
+        elif diff_dict[GameVariable.FRAGCOUNT] < 0:
+            self.kill_count += 1  # INCREMENT EACH TIME FRAGS INCREASES
+
+        # Ammo
         if diff_dict[GameVariable.SELECTED_WEAPON_AMMO] < 0:  # Old Ammo < New Ammo
             r += (diff_dict[GameVariable.SELECTED_WEAPON_AMMO] * -0.15)
         else:
@@ -163,13 +175,11 @@ class DoomGameState:
         # Displacement -- just encouraging movement
         last_place = self.position_buffer[0]
         distance_moved = distance.euclidean(last_place, current_position) * 4e-5
-        if distance_moved == 0:
-            r -= .5
         r += distance_moved
         if len(self.position_buffer) > 1:
             self.position_buffer = self.position_buffer[1:]
 
-        return max(r, 0)
+        return r
 
     def update(self):
         self.s_t = self.s_t1

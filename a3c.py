@@ -89,7 +89,21 @@ sess.run(init)
 
 # summary for tensorboard
 score_input = tf.placeholder(tf.int32)
+kills_input = tf.placeholder(tf.int32)
+suicides_input = tf.placeholder(tf.int32)
+deaths_input = tf.placeholder(tf.int32)
+
 tf.summary.scalar("score", score_input)
+tf.summary.scalar("kills", kills_input)
+tf.summary.scalar("suicides", suicides_input)
+tf.summary.scalar("deaths", deaths_input)
+
+SUMMARY_INPUTS = {
+    "score": score_input,
+    "kills": kills_input,
+    "suicides": suicides_input,
+    "deaths": deaths_input
+}
 
 summary_op = tf.summary.merge_all()
 summary_writer = tf.summary.FileWriter(LOG_FILE, sess.graph)
@@ -127,6 +141,9 @@ def train_function(parallel_index):
     start_time = time.time() - wall_t
     training_thread.set_start_time(start_time)
     thread_counter = 0
+    thread_steps = global_t
+
+    summary_writer = tf.summary.FileWriter(LOG_FILE + "_{}".format(parallel_index), sess.graph)
 
     while True:
         if thread_counter == 0 and parallel_index == 0:
@@ -138,9 +155,10 @@ def train_function(parallel_index):
         if stop_requested or global_t > MAX_TIME_STEP:
             break
 
-        diff_global_t = training_thread.process(sess, global_t, summary_writer,
-                                                summary_op, score_input)
+        diff_global_t = training_thread.process(sess, global_t, thread_steps, summary_writer)
+
         global_t += diff_global_t
+        thread_steps += global_t
         thread_counter -= 1
 
 

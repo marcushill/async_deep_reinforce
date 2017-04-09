@@ -77,17 +77,21 @@ class A3CTrainingThread(object):
     def choose_action(self, pi_values):
         return np.random.choice(range(len(pi_values)), p=pi_values)
 
-    def _record_score(self, sess, summary_writer, summary_op, score_input, score, global_t):
-        summary_str = sess.run(summary_op, feed_dict={
-            score_input: score
-        })
-        summary_writer.add_summary(summary_str, global_t)
+    def _record_score(self, sess, summary_writer, step_count):
+        summary = tf.Summary()
+        k_d = self.game.kill_count / (float(self.game.death_count) if self.game.death_count > 0 else 1.0)
+        summary.value.add(tag="Score", simple_value=float(self.game.score))
+        summary.value.add(tag="Deaths", simple_value=float(self.game.death_count))
+        summary.value.add(tag="Suicides", simple_value=float(self.game.suicide_count))
+        summary.value.add(tag="Kills", simple_value=float(self.game.kill_count))
+        summary.value.add(tag="K/D", simple_value=float(k_d))
+        summary_writer.add_summary(summary, step_count)
         summary_writer.flush()
 
     def set_start_time(self, start_time):
         self.start_time = start_time
 
-    def process(self, sess, global_t, summary_writer, summary_op, score_input):
+    def process(self, sess, global_t, episode_count, summary_writer):
         states = []
         actions = []
         rewards = []
@@ -160,8 +164,7 @@ class A3CTrainingThread(object):
                 terminal_end = True
                 print("score={}".format(self.game.score))
 
-                self._record_score(sess, summary_writer, summary_op, score_input,
-                                   self.game.score, global_t)
+                self._record_score(sess, summary_writer, episode_count)
 
                 self.game.reset()
                 try:
