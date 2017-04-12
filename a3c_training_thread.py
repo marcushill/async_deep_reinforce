@@ -7,7 +7,7 @@ import sys
 
 # from game_state import GameState
 # from game_state import ACTION_SIZE
-from game_ac_network import GameACFFNetwork, GameACLSTMNetwork
+from game_ac_network import GameACLSTMNetwork
 
 from constants import GAMMA
 from constants import LOCAL_T_MAX
@@ -44,8 +44,15 @@ class A3CTrainingThread(object):
 
         with tf.device(device):
             var_refs = [v._ref() for v in self.local_network.get_vars()]
+            feature_refs = [v._ref() for v in self.local_network.get_feature_vars()]
             self.gradients = tf.gradients(
                 self.local_network.total_loss, var_refs,
+                gate_gradients=False,
+                aggregation_method=None,
+                colocate_gradients_with_ops=False)
+
+            self.feature_gradients = tf.gradients(
+                self.local_network.feature_loss, feature_refs,
                 gate_gradients=False,
                 aggregation_method=None,
                 colocate_gradients_with_ops=False)
@@ -53,6 +60,11 @@ class A3CTrainingThread(object):
         self.apply_gradients = grad_applier.apply_gradients(
             global_network.get_vars(),
             self.gradients)
+
+        self.apply_feature_gradients = grad_applier.apply_gradients(
+            global_network.get_feature_vars(),
+            self.feature_gradients
+        )
 
         self.sync = self.local_network.sync_from(global_network)
 
@@ -77,7 +89,7 @@ class A3CTrainingThread(object):
     def choose_action(self, pi_values):
         return np.random.choice(range(len(pi_values)), p=pi_values)
 
-    def _record_score(self, sess, summary_writer, step_count):
+    def _record_score(self, sess, summary_writer, feature_accuracy, step_count):
         summary = tf.Summary()
         k_d = self.game.kill_count / (float(self.game.death_count) if self.game.death_count > 0 else 1.0)
         summary.value.add(tag="Score", simple_value=float(self.game.score))
@@ -85,6 +97,7 @@ class A3CTrainingThread(object):
         summary.value.add(tag="Suicides", simple_value=float(self.game.suicide_count))
         summary.value.add(tag="Kills", simple_value=float(self.game.kill_count))
         summary.value.add(tag="K/D", simple_value=float(k_d))
+        summary.value.add(tag="Enemy Detection Rate", simple_value=float(feature_accuracy))
         summary_writer.add_summary(summary, step_count)
         summary_writer.flush()
 
@@ -96,6 +109,8 @@ class A3CTrainingThread(object):
         actions = []
         rewards = []
         values = []
+        predicted_features = []
+        actual_features = []
 
         terminal_end = False
 
@@ -121,11 +136,20 @@ class A3CTrainingThread(object):
                 skip_counter = 0
 
             pi_, value_ = self.local_network.run_policy_and_value(sess, self.game.s_t)
+            feat_pred = self.local_network.run_feature_detection(sess, self.game.s_t)
+            actual_feature = 0
+            if self.game.sees_enemy:
+                actual_feature = 1
+
+            sees_enemy = np.argmax(feat_pred) == 1
+
             action = self.choose_action(pi_)
 
             states.append(self.game.s_t)
             actions.append(action)
             values.append(value_)
+            predicted_features.append(feat_pred)
+            actual_features.append(actual_feature)
 
             if (self.thread_index == 0) and (self.local_t % LOG_INTERVAL == 0):
                 print("    pi= {}".format(pi_))
@@ -133,6 +157,7 @@ class A3CTrainingThread(object):
                 print("     V= {}".format(value_))
                 print(" Score=", self.game.score)
                 print("Reward=", self.game.reward)
+                print("Sees enemy=", sees_enemy)
 
             # process game
             self.game.process(action)
@@ -148,13 +173,15 @@ class A3CTrainingThread(object):
 
             self.local_t += 1
 
-            if len(actions) == 30 and not self.game.terminal and episode_step_count < self.game.max_episode_length -1:
+            if len(actions) == LOCAL_T_MAX and not self.game.terminal and episode_step_count < self.game.max_episode_length -1:
                 value = self.local_network.run_value(sess, self.game.s_t)
-                self.train(sess, global_t, actions, states, rewards, values, value)
+                self.train(sess, global_t, actions, states, rewards, values, actual_features, predicted_features, value)
                 states = []
                 actions = []
                 rewards = []
                 values = []
+                predicted_features = []
+                actual_features = []
 
             # s_t1 -> s_t
             self.game.update()
@@ -164,7 +191,12 @@ class A3CTrainingThread(object):
                 terminal_end = True
                 print("score={}".format(self.game.score))
 
-                self._record_score(sess, summary_writer, episode_count)
+                feature_accuracy = sum(
+                    1 if np.argmax(v) == actual_features[i] else 0 for i, v in enumerate(predicted_features)) / len(predicted_features)
+
+                print("feature_accuracy={}".format(feature_accuracy))
+
+                self._record_score(sess, summary_writer, feature_accuracy, episode_count)
 
                 self.game.reset()
                 try:
@@ -177,7 +209,7 @@ class A3CTrainingThread(object):
         if not terminal_end:
             R = self.local_network.run_value(sess, self.game.s_t)
 
-        self.train(sess, global_t, actions, states, rewards, values, R)
+        self.train(sess, global_t, actions, states, rewards, values, actual_features, predicted_features, R)
 
         if (self.thread_index == 0) and (self.local_t - self.prev_local_t >= PERFORMANCE_LOG_INTERVAL):
             self.prev_local_t += PERFORMANCE_LOG_INTERVAL
@@ -190,7 +222,7 @@ class A3CTrainingThread(object):
         diff_local_t = self.local_t - start_local_t
         return diff_local_t
 
-    def train(self, sess, global_t, actions, states, rewards, values, R=0.0):
+    def train(self, sess, global_t, actions, states, rewards, values, actual_features, predicted_features, R=0.0):
         # The other code does the below every 30 frames
         actions.reverse()
         states.reverse()
@@ -216,12 +248,20 @@ class A3CTrainingThread(object):
 
         cur_learning_rate = self._anneal_learning_rate(global_t)
 
+        self.local_network.apply_feature_gradient(sess, self.apply_feature_gradients,
+                                                  batch_si,
+                                                  predicted_features,
+                                                  actual_features,
+                                                  cur_learning_rate)
+
+
         self.local_network.apply_gradients(sess, self.apply_gradients,
                                            batch_si,
                                            batch_a,
                                            batch_td,
                                            batch_R,
                                            cur_learning_rate)
+
 
     def run_test_game(self, sess):
         self.game.reset()

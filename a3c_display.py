@@ -12,7 +12,7 @@ import time
 
 from vizdoom import GameVariable
 from doom_game_state import DoomGameState
-from game_ac_network import GameACFFNetwork, GameACLSTMNetwork
+from game_ac_network import GameACLSTMNetwork
 from a3c_training_thread import A3CTrainingThread
 # from game_state import GameState
 from rmsprop_applier import RMSPropApplier
@@ -52,10 +52,9 @@ global_t = 0
 stop_requested = False
 
 global_game = DoomGameState(scenario_path="scenarios/cig.cfg", window_visible=True)
-if USE_LSTM:
-    global_network = GameACLSTMNetwork(global_game.get_action_size(), -1, device)
-else:
-    global_network = GameACFFNetwork(global_game.get_action_size(), -1, device)
+
+global_network = GameACLSTMNetwork(global_game.get_action_size(), -1, device)
+
 
 training_threads = []
 
@@ -88,17 +87,19 @@ def choose_action(pi_values):
 global_game.start()
 print(global_game.game.get_available_game_variables())
 while not global_game.terminal:
-    # labels = global_game.labels_buffer
-    # if labels is not None:
-    #     cv2.imshow('ViZDoom Labels Buffer', labels)
-    #
-    cv2.waitKey(300)
+    labels = global_game.labels_buffer
+    if labels is not None:
+        cv2.imshow('ViZDoom Labels Buffer', labels)
 
-    # for l in global_game.labels:
-    #      print("Object id:", l.object_id, "object name:", l.object_name, "label:", l.value)
-    # #     print("Object position X:", l.object_position_x, "Y:", l.object_position_y, "Z:", l.object_position_z)
-    # print("Sees Enemy: ", any(x.object_name == "DoomPlayer" and x.value != 255 for x in global_game.labels))
-    #
+    cv2.waitKey(500)
+
+    for l in global_game.labels:
+         print("Object id:", l.object_id, "object name:", l.object_name, "label:", l.value)
+    #     print("Object position X:", l.object_position_x, "Y:", l.object_position_y, "Z:", l.object_position_z)
+    print("Sees Enemy: ", any(x.object_name == "DoomPlayer" and x.object_id != 0 for x in global_game.labels))
+    sees_enemy = global_network.run_feature_detection(sess, global_game.s_t)
+    print("Network sees enemy", sees_enemy)
+
     print("Pre-reward: ", global_game.game.get_last_reward())
     print("Kill Count: ", global_game.kill_count)
     print("Death Count: ", global_game.death_count)
@@ -110,7 +111,6 @@ while not global_game.terminal:
 
 
     pi_values = global_network.run_policy(sess, global_game.s_t)
-
     action = choose_action(pi_values)
     # print("Policy: ", pi_values)
     # print("Action: ", action)

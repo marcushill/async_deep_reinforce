@@ -28,6 +28,7 @@ class DoomGameState:
         game.add_game_args("+name AI +colorset 0")
         game.add_available_game_variable(GameVariable.POSITION_X)
         game.add_available_game_variable(GameVariable.POSITION_Y)
+        game.set_labels_buffer_enabled(True)
 
         self.game = game
 
@@ -56,10 +57,10 @@ class DoomGameState:
             return reward, None
         # print(frame.shape)
         # frame = frame[10:-10, 30:-30]
-        frame = scipy.misc.imresize(frame, [160, 120])
+        frame = scipy.misc.imresize(frame, [108, 60])
         # print("After Resize: ", frame.shape)
         if reshape:
-            frame = np.reshape(frame, (1, 160, 120, 3))
+            frame = np.reshape(frame, (1, 108, 60, 3))
 
         frame = frame.astype(np.float32)
         frame *= (1.0 / 255.0)
@@ -151,7 +152,6 @@ class DoomGameState:
 
         diff_dict = {k: old_variables[k] - self.last_variables[k] for k in old_variables.keys()}
 
-
         # Health
         if diff_dict[GameVariable.HEALTH] < 0:  # Old Health less than new health
             r += (diff_dict[GameVariable.HEALTH] * -0.04)
@@ -159,7 +159,10 @@ class DoomGameState:
             r -= (diff_dict[GameVariable.HEALTH] * 0.03)
 
         # Frag count
-        r += diff_dict[GameVariable.FRAGCOUNT] * -1.5
+        if diff_dict[GameVariable.FRAGCOUNT] < 0:  # Frags when up
+            r += diff_dict[GameVariable.FRAGCOUNT] * -2.5
+        else:  # frags went down
+            r += diff_dict[GameVariable.FRAGCOUNT] * -0.5  # mixes with death penalty
 
         if diff_dict[GameVariable.FRAGCOUNT] > 0:  # Old frags > New frags
             self.suicide_count += 1  # INCREMENT EACH TIME FRAG COUNT DECREASES
@@ -169,8 +172,8 @@ class DoomGameState:
         # Ammo
         if diff_dict[GameVariable.SELECTED_WEAPON_AMMO] < 0:  # Old Ammo < New Ammo
             r += (diff_dict[GameVariable.SELECTED_WEAPON_AMMO] * -0.15)
-        else:
-            r -= (diff_dict[GameVariable.SELECTED_WEAPON_AMMO] * 0.04)
+        # else:
+        #     r -= (diff_dict[GameVariable.SELECTED_WEAPON_AMMO] * 0.04)
 
         # Displacement -- just encouraging movement
         last_place = self.position_buffer[0]
@@ -186,6 +189,10 @@ class DoomGameState:
 
     def get_action_size(self):
         return len(self.real_actions)
+
+    @property
+    def sees_enemy(self):
+        return any(x.object_name == "DoomPlayer" and x.object_id != 0 for x in self.labels)
 
     @property
     def labels_buffer(self):
