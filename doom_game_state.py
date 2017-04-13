@@ -105,7 +105,7 @@ class DoomGameState:
         real_action = self.real_actions[action]
         reward, frame = self._process_frame(real_action, True)
         # print("Before reward:", reward)
-        self.reward = self.__calculate_reward(reward) / 10  # This should (mostly) push the reward between -1 and 1
+        self.reward = self.__calculate_reward(reward)
         # print("After reward: ", self.reward)
 
         # self.s_t is the state over time an 84x84x4 3-dimensional matrix
@@ -206,3 +206,8 @@ class DoomGameState:
     @property
     def max_episode_length(self):
         return self.game.get_episode_timeout()
+
+    @property
+    def avaliable_ammo(self):
+        return self.game.get_game_variable(
+            GameVariable.SELECTED_WEAPON_AMMO)

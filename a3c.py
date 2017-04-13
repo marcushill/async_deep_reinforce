@@ -10,7 +10,7 @@ import os
 import time
 
 from doom_game_state import DoomGameState
-from game_ac_network import GameACLSTMNetwork
+from game_ac_network import GameACLSTMNetwork, GameNavigationNetwork
 from a3c_training_thread import A3CTrainingThread
 # from game_state import GameState
 from rmsprop_applier import RMSPropApplier
@@ -52,6 +52,7 @@ stop_requested = False
 global_game = DoomGameState(scenario_path="scenarios/cig.cfg")
 if USE_LSTM:
     global_network = GameACLSTMNetwork(global_game.get_action_size(), -1, device)
+global_navigation_network = GameNavigationNetwork(3, -1, device)
 
 del global_game
 
@@ -70,12 +71,15 @@ for i in range(PARALLEL_SIZE):
     game = DoomGameState(scenario_path="scenarios/cig.cfg", window_visible=i == 0)
     if USE_LSTM:
         local_network = GameACLSTMNetwork(game.get_action_size(), i, learning_rate_input, device)
+    navigation_network = GameNavigationNetwork(3, -1, device)
 
     training_thread = A3CTrainingThread(i, local_network, global_network, initial_learning_rate,
                                         learning_rate_input, MAX_TIME_STEP,
                                         grad_applier,
                                         game,
-                                        device=device)
+                                        device=device,
+                                        navigation_network=navigation_network,
+                                        global_nav_network=global_navigation_network)
     training_threads.append(training_thread)
 
 # prepare session

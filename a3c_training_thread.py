@@ -7,7 +7,7 @@ import sys
 
 # from game_state import GameState
 # from game_state import ACTION_SIZE
-from game_ac_network import GameACLSTMNetwork
+from game_ac_network import GameACLSTMNetwork, GameNavigationNetwork
 
 from constants import GAMMA
 from constants import LOCAL_T_MAX
@@ -28,19 +28,17 @@ class A3CTrainingThread(object):
                  max_global_time_step,
                  grad_applier,
                  game,
-                 device):
+                 device,
+                 navigation_network,
+                 global_navigation_network):
 
         self.thread_index = thread_index
         self.learning_rate_input = learning_rate_input
         self.max_global_time_step = max_global_time_step
 
-        # if USE_LSTM:
-        #   self.local_network = GameACLSTMNetwork(ACTION_SIZE, thread_index, device)
-        # else:
-        #   self.local_network = GameACFFNetwork(ACTION_SIZE, thread_index, device)
-
         self.local_network = local_network
         self.local_network.prepare_loss(ENTROPY_BETA)
+        self.navigation_network = navigation_network
 
         with tf.device(device):
             var_refs = [v._ref() for v in self.local_network.get_vars()]
@@ -57,6 +55,15 @@ class A3CTrainingThread(object):
                 aggregation_method=None,
                 colocate_gradients_with_ops=False)
 
+            if navigation_network is not None and global_navigation_network is not None:
+                nav_var_refs = [v._ref() for v in self.local_network.get_vars()]
+                self.nav_gradients = tf.gradients(
+                    self.navigation_network.total_loss, nav_var_refs,
+                    gate_gradients=False,
+                    aggregation_method=None,
+                    colocate_gradients_with_ops=False)
+
+
         self.apply_gradients = grad_applier.apply_gradients(
             global_network.get_vars(),
             self.gradients)
@@ -65,6 +72,12 @@ class A3CTrainingThread(object):
             global_network.get_feature_vars(),
             self.feature_gradients
         )
+
+        if self.nav_gradients is not None:
+            self.apply_nav_gradients = grad_applier.apply_gradients(
+                global_nav_network.get_vars(),
+                self.nav_gradients)
+            self.sync_nav = self.navigation_network.sync_from(global_nav_network)
 
         self.sync = self.local_network.sync_from(global_network)
 
@@ -112,6 +125,11 @@ class A3CTrainingThread(object):
         predicted_features = []
         actual_features = []
 
+        nav_states = []
+        nav_actions = []
+        nav_rewards = []
+        nav_values = []
+
         terminal_end = False
 
         # copy weights from shared to local
@@ -120,6 +138,9 @@ class A3CTrainingThread(object):
         start_local_t = self.local_t
 
         self.local_network.start_train()
+        if self.sync_nav is not None:
+            sess.run(self.sync_nav)
+            self.navigation_network.start_train()
 
         try:
             self.game.start()
@@ -143,7 +164,14 @@ class A3CTrainingThread(object):
 
             sees_enemy = np.argmax(feat_pred) == 1
 
-            action = self.choose_action(pi_)
+            if self.navigation_network is None or sees_enemy and self.game.avaliable_ammo > 0:
+                action = self.choose_action(pi_)
+            else:
+                pi_ = self.navigation_network.run_policy(sess, self.game.s_t)
+                action = self.choose_action(pi_) + 4 #MOVE_Forward is at index 4, turn right and left immediate follow
+                nav_states.append(self.game.s_t)
+                nav_actions.append(action)
+                nav_values.append(value_)
 
             states.append(self.game.s_t)
             actions.append(action)
@@ -169,7 +197,10 @@ class A3CTrainingThread(object):
             # self.episode_reward += reward
 
             # clip reward
-            rewards.append(np.clip(reward, -1, 1))
+            # rewards.append(np.clip(reward, -1, 1))
+            rewards.append(reward)
+            if sees_enemy:
+                nav_rewards.append(reward)
 
             self.local_t += 1
 
@@ -182,6 +213,14 @@ class A3CTrainingThread(object):
                 values = []
                 predicted_features = []
                 actual_features = []
+
+                if self.navigation_network is not None:
+                    nav_val = self.navigation_network.run_value(sess, self.game.s_t)
+                    self.train_nav(sess, global_t, nav_actions, nav_states, nav_rewards, nav_values, nav_value)
+                    nav_states = []
+                    nav_actions = []
+                    nav_rewards = []
+                    nav_values = []
 
             # s_t1 -> s_t
             self.game.update()
@@ -210,6 +249,7 @@ class A3CTrainingThread(object):
             R = self.local_network.run_value(sess, self.game.s_t)
 
         self.train(sess, global_t, actions, states, rewards, values, actual_features, predicted_features, R)
+        self.train_nav(sess, global_t, nav_actions, nav_states, nav_rewards, nav_values, nav_value)
 
         if (self.thread_index == 0) and (self.local_t - self.prev_local_t >= PERFORMANCE_LOG_INTERVAL):
             self.prev_local_t += PERFORMANCE_LOG_INTERVAL
@@ -262,6 +302,40 @@ class A3CTrainingThread(object):
                                            batch_R,
                                            cur_learning_rate)
 
+def train_nav(self, sess, global_t, actions, states, rewards, values, R=0.0):
+    # The other code does the below every 30 frames
+    actions.reverse()
+    states.reverse()
+    rewards.reverse()
+    values.reverse()
+
+    batch_si = []
+    batch_a = []
+    batch_td = []
+    batch_R = []
+
+    # compute and accmulate gradients
+    for (ai, ri, si, Vi) in zip(actions, rewards, states, values):
+        R = ri + GAMMA * R
+        td = R - Vi
+        a = np.zeros([self.game.get_action_size()])
+        a[ai] = 1
+
+        batch_si.append(si)
+        batch_a.append(a)
+        batch_td.append(td)
+        batch_R.append(R)
+
+    cur_learning_rate = self._anneal_learning_rate(global_t)
+
+    self.navigation_network.apply_gradients(sess, self.apply_nav_gradients,
+                                       batch_si,
+                                       batch_a,
+                                       batch_td,
+                                       batch_R,
+                                       cur_learning_rate)
+
+
 
     def run_test_game(self, sess):
         self.game.reset()
@@ -269,9 +343,16 @@ class A3CTrainingThread(object):
 
         while not self.game.terminal:
             pi_values = self.local_network.run_policy(sess, self.game.s_t)
-            action = np.random.choice(range(len(pi_values)), p=pi_values)
+            feat_pred = self.local_network.run_feature_detection(sess, self.game.s_t)
+            sees_enemy = np.argmax(feat_pred) == 1
+
+            if sees_enemy:
+                action = np.random.choice(range(len(pi_values)), p=pi_values)
+            else:
+                pi_values = self.navigation_network.run_policy(sess, self.game.s_t)
+                action = np.random.choice(range(len(pi_values)), p=pi_values) + 4
             self.game.process(action)
+
         self.game.game.close()
         self.game.game.init()
         self.game.reset()
-
