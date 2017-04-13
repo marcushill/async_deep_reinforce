@@ -88,6 +88,7 @@ class DoomGameState:
         self.last_variables = None
         self.position_buffer = None
 
+        self.game.add_game_args("-record " + name)
         self.game.new_episode(name)
 
         # Add specific number of bots

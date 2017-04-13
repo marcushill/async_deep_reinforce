@@ -244,8 +244,8 @@ class GameACLSTMNetwork(GameACNetwork):
         # input for feature
         # self.feature = tf.placeholder("float", [None, 1])
         self.actual_feature = tf.placeholder(tf.int32, [None])
-        self.feature_loss = tf.nn.sparse_softmax_cross_entropy_with_logits(
-            logits=self.features, labels=self.actual_feature)
+        self.feature_loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(
+            logits=self.features, labels=self.actual_feature))
 
     def get_vars(self):
         return [self.W_conv1, self.b_conv1,

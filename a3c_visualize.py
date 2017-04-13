@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 import random
 
 from doom_game_state import DoomGameState
-from game_ac_network import GameACFFNetwork, GameACLSTMNetwork
+from game_ac_network import GameACLSTMNetwork
 from a3c_training_thread import A3CTrainingThread
 from rmsprop_applier import RMSPropApplier
 
@@ -26,20 +26,18 @@ device = "/cpu:0"
 global_game = DoomGameState(scenario_path="scenarios/cig.cfg")
 if USE_LSTM:
     global_network = GameACLSTMNetwork(global_game.get_action_size(), -1, device)
-else:
-    global_network = GameACFFNetwork(global_game.get_action_size(), -1, device)
 del global_game
 
 training_threads = []
 
 learning_rate_input = tf.placeholder("float")
 
-grad_applier = RMSPropApplier(learning_rate = learning_rate_input,
-                              decay = RMSP_ALPHA,
-                              momentum = 0.0,
-                              epsilon = RMSP_EPSILON,
-                              clip_norm = GRAD_NORM_CLIP,
-                              device = device)
+grad_applier = RMSPropApplier(learning_rate=learning_rate_input,
+                              decay=RMSP_ALPHA,
+                              momentum=0.0,
+                              epsilon=RMSP_EPSILON,
+                              clip_norm=GRAD_NORM_CLIP,
+                              device=device)
 
 sess = tf.Session()
 init = tf.initialize_all_variables()
@@ -48,24 +46,32 @@ sess.run(init)
 saver = tf.train.Saver()
 checkpoint = tf.train.get_checkpoint_state(CHECKPOINT_DIR)
 if checkpoint and checkpoint.model_checkpoint_path:
-  saver.restore(sess, checkpoint.model_checkpoint_path)
-  print("checkpoint loaded:", checkpoint.model_checkpoint_path)
+    saver.restore(sess, checkpoint.model_checkpoint_path)
+    print("checkpoint loaded:", checkpoint.model_checkpoint_path)
 else:
-  print("Could not find old checkpoint")
-  
+    print("Could not find old checkpoint")
+
 W_conv1 = sess.run(global_network.W_conv1)
 
 # show graph of W_conv1
 fig, axes = plt.subplots(4, 16, figsize=(12, 6),
-             subplot_kw={'xticks': [], 'yticks': []})
+                         subplot_kw={'xticks': [], 'yticks': []})
 fig.subplots_adjust(hspace=0.1, wspace=0.1)
 
-for ax,i in zip(axes.flat, range(4*16)):
-  inch = i//16
-  outch = i%16
-  img = W_conv1[:,:,inch,outch]
-  ax.imshow(img, cmap=plt.cm.gray, interpolation='nearest')
-  ax.set_title(str(inch) + "," + str(outch))
+# for ax, i in zip(axes.flat, range(4 * 16)):
+#     inch = i // 16
+#     outch = i % 16
+#     img = W_conv1[:, :, inch, outch]
+#     ax.imshow(img, cmap=plt.cm.gray, interpolation='nearest')
+#     ax.set_title(str(inch) + "," + str(outch))
+
+for j in range(2):
+    for ax, i in zip(axes.flat, range(3 * 16)):
+        inch = i // 16
+        outch = i % 16
+        img = W_conv1[j, :, :, inch, outch]
+        ax.imshow(img, cmap=plt.cm.gray, interpolation='nearest')
+        ax.set_title(str(j) + "," + str(inch) + "," + str(outch))
+
 
 plt.show()
-
