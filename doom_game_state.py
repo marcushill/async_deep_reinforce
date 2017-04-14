@@ -77,7 +77,7 @@ class DoomGameState:
         self.skip_next_round = False
         self.kill_count = 0  # INCREMENT EACH TIME FRAGS INCREASES
         self.death_count = 0  # INCREMENT EACH TIME WE DIE INCREASES
-        self.suicide_count = 0 # INCREMENT EACH TIME FRAG COUNT DECREASES
+        self.suicide_count = 0  # INCREMENT EACH TIME FRAG COUNT DECREASES
         self.in_dying_cycle = False
 
     @property
@@ -88,7 +88,6 @@ class DoomGameState:
         self.last_variables = None
         self.position_buffer = None
 
-        self.game.add_game_args("-record " + name)
         self.game.new_episode(name)
 
         # Add specific number of bots

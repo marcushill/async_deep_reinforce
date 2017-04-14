@@ -3,8 +3,8 @@
 LOCAL_T_MAX = 40  # repeat step size
 RMSP_ALPHA = 0.99  # decay parameter for RMSProp
 RMSP_EPSILON = 0.1  # epsilon parameter for RMSProp
-CHECKPOINT_DIR = 'checkpoints_deathmatch_fixed19'
-LOG_FILE = 'tmp/a3c_log_doom_deathmatch_fixed19/log_'
+CHECKPOINT_DIR = 'checkpoints_deathmatch_fixed20'
+LOG_FILE = 'tmp/a3c_log_doom_deathmatch_fixed20/log_'
 INITIAL_ALPHA_LOW = 1e-6  # log_uniform low limit for learning rate
 INITIAL_ALPHA_HIGH = 1e-4  # log_uniform high limit for learning rate
 FRAME_SKIP = 4

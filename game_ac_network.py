@@ -44,7 +44,6 @@ class GameACNetwork(object):
             # gradient of policy and value are summed up
             self.total_loss = policy_loss + value_loss
 
-
     def start_train(self):
         pass  # Used to save any data that might be needed at the end
 
@@ -76,7 +75,6 @@ class GameACNetwork(object):
                     sync_ops.append(sync_op)
 
                 return tf.group(*sync_ops, name=name)
-
 
     # weight initialization based on muupan's code
     # https://github.com/muupan/async-rl/blob/master/a3c_ale.py
@@ -140,7 +138,7 @@ class GameACLSTMNetwork(GameACNetwork):
             h_conv1 = tf.nn.relu(self._conv2d(self.s, self.W_conv1, 4) + self.b_conv1)
             h_conv2 = tf.nn.relu(self._conv2d(h_conv1, self.W_conv2, 2) + self.b_conv2)
 
-            h_conv2_flat = tf.reshape(h_conv2, [-1,  2304])
+            h_conv2_flat = tf.reshape(h_conv2, [-1, 2304])
             h_fc1 = tf.nn.relu(tf.matmul(h_conv2_flat, self.W_fc1) + self.b_fc1)
             # h_fc1 shape=(5,512)
 
@@ -280,10 +278,10 @@ class GameACLSTMNetwork(GameACNetwork):
     def apply_feature_gradient(self, sess, apply_gradients, batch_si, batch_pred, batch_real, cur_learn_rate):
         sess.run(apply_gradients,
                  feed_dict={
-                 self.s: batch_si,
-                 self.features: batch_pred,
-                 self.actual_feature: batch_real,
-                 self.learning_rate_input: cur_learn_rate})
+                     self.s: batch_si,
+                     self.features: batch_pred,
+                     self.actual_feature: batch_real,
+                     self.learning_rate_input: cur_learn_rate})
 
     def sync_from(self, src_network, name=None):
         src_vars = src_network.get_vars()
@@ -305,58 +303,72 @@ class GameACLSTMNetwork(GameACNetwork):
                 return tf.group(*sync_ops, name=name)
 
 
-
 # Actor-Critic FF Network
 class GameNavigationNetwork(GameACNetwork):
-  def __init__(self,
-               action_size,
-               thread_index, # -1 for global
-               device="/cpu:0"):
-    GameACNetwork.__init__(self, action_size, thread_index, device)
+    def __init__(self,
+                 action_size,
+                 thread_index,  # -1 for global
+                 learning_rate_input,
+                 device="/cpu:0"):
+        GameACNetwork.__init__(self, action_size, thread_index, learning_rate_input, device)
 
-    scope_name = "net_" + str(self._thread_index)
-    with tf.device(self._device), tf.variable_scope(scope_name) as scope:
-        self.W_conv1, self.b_conv1 = self._conv_variable([2, 8, 8, 3, 16])  # stride=4
-        self.W_conv2, self.b_conv2 = self._conv_variable([1, 4, 4, 16, 32])  # stride=2
+        scope_name = "net_" + str(self._thread_index)
+        with tf.device(self._device), tf.variable_scope(scope_name) as scope:
+            self.W_conv1, self.b_conv1 = self._conv_variable([2, 8, 8, 3, 16])  # stride=4
+            self.W_conv2, self.b_conv2 = self._conv_variable([1, 4, 4, 16, 32])  # stride=2
 
-        self.W_fc1, self.b_fc1 = self._fc_variable([2304, 512])
+            self.W_fc1, self.b_fc1 = self._fc_variable([2304, 512])
 
-        # weight for policy output layer
-        self.W_fc2, self.b_fc2 = self._fc_variable([512, action_size])
+            # weight for policy output layer
+            self.W_fc2, self.b_fc2 = self._fc_variable([512, action_size])
 
-        # weight for value output layer
-        self.W_fc3, self.b_fc3 = self._fc_variable([512, 1])
+            # weight for value output layer
+            self.W_fc3, self.b_fc3 = self._fc_variable([512, 1])
 
-        # state (input)
-        self.s = tf.placeholder("float", [None, 4, 108, 60, 3])
+            # state (input)
+            self.s = tf.placeholder("float", [None, 4, 108, 60, 3])
 
-        h_conv1 = tf.nn.relu(self._conv2d(self.s,  self.W_conv1, 4) + self.b_conv1)
-        h_conv2 = tf.nn.relu(self._conv2d(h_conv1, self.W_conv2, 2) + self.b_conv2)
+            h_conv1 = tf.nn.relu(self._conv2d(self.s, self.W_conv1, 4) + self.b_conv1)
+            h_conv2 = tf.nn.relu(self._conv2d(h_conv1, self.W_conv2, 2) + self.b_conv2)
 
-        h_conv2_flat = tf.reshape(h_conv2, [-1, 2304])
-        h_fc1 = tf.nn.relu(tf.matmul(h_conv2_flat, self.W_fc1) + self.b_fc1)
+            h_conv2_flat = tf.reshape(h_conv2, [-1, 2304])
+            h_fc1 = tf.nn.relu(tf.matmul(h_conv2_flat, self.W_fc1) + self.b_fc1)
 
-        # policy (output)
-        self.pi = tf.nn.softmax(tf.matmul(h_fc1, self.W_fc2) + self.b_fc2)
-        # value (output)
-        v_ = tf.matmul(h_fc1, self.W_fc3) + self.b_fc3
-        self.v = tf.reshape( v_, [-1] )
+            # policy (output)
+            self.pi = tf.nn.softmax(tf.matmul(h_fc1, self.W_fc2) + self.b_fc2)
+            # value (output)
+            v_ = tf.matmul(h_fc1, self.W_fc3) + self.b_fc3
+            self.v = tf.reshape(v_, [-1])
 
-  def run_policy_and_value(self, sess, s_t):
-    pi_out, v_out = sess.run( [self.pi, self.v], feed_dict = {self.s : [s_t]} )
-    return (pi_out[0], v_out[0])
+    def run_policy_and_value(self, sess, s_t):
+        pi_out, v_out = sess.run([self.pi, self.v], feed_dict={self.s: [s_t]})
+        return (pi_out[0], v_out[0])
 
-  def run_policy(self, sess, s_t):
-    pi_out = sess.run( self.pi, feed_dict = {self.s : [s_t]} )
-    return pi_out[0]
+    def run_policy(self, sess, s_t):
+        pi_out = sess.run(self.pi, feed_dict={self.s: [s_t]})
+        return pi_out[0]
 
-  def run_value(self, sess, s_t):
-    v_out = sess.run( self.v, feed_dict = {self.s : [s_t]} )
-    return v_out[0]
+    def run_value(self, sess, s_t):
+        v_out = sess.run(self.v, feed_dict={self.s: [s_t]})
+        return v_out[0]
 
-  def get_vars(self):
-    return [self.W_conv1, self.b_conv1,
-            self.W_conv2, self.b_conv2,
-            self.W_fc1, self.b_fc1,
-            self.W_fc2, self.b_fc2,
-            self.W_fc3, self.b_fc3]
+    def get_vars(self):
+        return [self.W_conv1, self.b_conv1,
+                self.W_conv2, self.b_conv2,
+                self.W_fc1, self.b_fc1,
+                self.W_fc2, self.b_fc2,
+                self.W_fc3, self.b_fc3]
+
+    def apply_gradients(self, sess, apply_gradients, batch_si, batch_a, batch_td, batch_R, cur_learn_rate):
+        batch_si.reverse()
+        batch_a.reverse()
+        batch_td.reverse()
+        batch_R.reverse()
+
+        sess.run(apply_gradients,
+                 feed_dict={
+                     self.s: batch_si,
+                     self.a: batch_a,
+                     self.td: batch_td,
+                     self.r: batch_R,
+                     self.learning_rate_input: cur_learn_rate})

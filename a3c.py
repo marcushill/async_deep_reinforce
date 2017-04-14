@@ -50,15 +50,16 @@ global_t = 0
 stop_requested = False
 
 global_game = DoomGameState(scenario_path="scenarios/cig.cfg")
+learning_rate_input = tf.placeholder("float")
+
 if USE_LSTM:
-    global_network = GameACLSTMNetwork(global_game.get_action_size(), -1, device)
-global_navigation_network = GameNavigationNetwork(3, -1, device)
+    global_network = GameACLSTMNetwork(global_game.get_action_size(), -1, learning_rate_input, device)
+global_navigation_network = GameNavigationNetwork(3, -1, learning_rate_input, device)
 
 del global_game
 
 training_threads = []
 
-learning_rate_input = tf.placeholder("float")
 
 grad_applier = RMSPropApplier(learning_rate=learning_rate_input,
                               decay=RMSP_ALPHA,
@@ -71,7 +72,7 @@ for i in range(PARALLEL_SIZE):
     game = DoomGameState(scenario_path="scenarios/cig.cfg", window_visible=i == 0)
     if USE_LSTM:
         local_network = GameACLSTMNetwork(game.get_action_size(), i, learning_rate_input, device)
-    navigation_network = GameNavigationNetwork(3, -1, device)
+    navigation_network = GameNavigationNetwork(3, i, learning_rate_input, device)
 
     training_thread = A3CTrainingThread(i, local_network, global_network, initial_learning_rate,
                                         learning_rate_input, MAX_TIME_STEP,
@@ -79,7 +80,7 @@ for i in range(PARALLEL_SIZE):
                                         game,
                                         device=device,
                                         navigation_network=navigation_network,
-                                        global_nav_network=global_navigation_network)
+                                        global_navigation_network=global_navigation_network)
     training_threads.append(training_thread)
 
 # prepare session
